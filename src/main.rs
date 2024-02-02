@@ -1,5 +1,5 @@
 use dotenvy::dotenv;
-use std::future::IntoFuture;
+use std::{future::IntoFuture, hash};
 use std::sync::Arc;
 use tokio::{
     net::TcpListener,
@@ -45,9 +45,15 @@ async fn main() {
 
     let filesave = mpsc::channel(1000);
 
+    let hashmap = Arc::new(Mutex::new(data));
     let context = context::AppContext {
-        hashmap: Arc::new(Mutex::new(data)),
+        hashmap: hashmap.clone(),
         sender_filesave: filesave.0.clone(),
+
+        keyservice: Arc::new(service::KeyService {
+            hashmap: hashmap.clone(),
+            sender_filesave: filesave.0.clone(),
+        }),
     };
 
     let router = server::create_router(Arc::new(context)).await;

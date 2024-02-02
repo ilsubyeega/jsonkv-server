@@ -1,11 +1,11 @@
 use json_patch::{patch, Patch};
 use std::sync::Arc;
-use tokio::sync::Mutex;
-
-use crate::context::AppContext;
+use tokio::sync::{mpsc, Mutex};
 
 pub struct KeyService {
-    context: Arc<AppContext>,
+    // cloned from appcontext.
+    pub hashmap: Arc<Mutex<std::collections::HashMap<String, serde_json::Value>>>,
+    pub sender_filesave: mpsc::Sender<(String, serde_json::Value)>,
 }
 
 pub trait KeyServiceTrait {
@@ -37,7 +37,7 @@ pub trait KeyServiceTrait {
 impl KeyServiceTrait for KeyService {
     async fn get_key(&self, key: String) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
         {
-            let hashmap = self.context.hashmap.lock().await;
+            let hashmap = self.hashmap.lock().await;
             if let Some(value) = hashmap.get(&key) {
                 return Ok(value.clone());
             }
@@ -51,12 +51,11 @@ impl KeyServiceTrait for KeyService {
         value: serde_json::Value,
     ) -> Result<(), Box<dyn std::error::Error>> {
         {
-            let mut hashmap = self.context.hashmap.lock().await;
+            let mut hashmap = self.hashmap.lock().await;
             hashmap.insert(key.clone(), value.clone());
         }
         // Sends to the filesave channel in order to save the data to the file.
-        self.context
-            .sender_filesave
+        self.sender_filesave
             .send((key.clone(), value.clone()))
             .await
             .unwrap();
@@ -79,7 +78,7 @@ impl KeyServiceTrait for KeyService {
         // Parse the json-patch on value parameter first.
         let patch_data: Patch = serde_json::from_value(value)?;
         let mut data = {
-            let hashmap = self.context.hashmap.lock().await;
+            let hashmap = self.hashmap.lock().await;
             hashmap.get(&key).ok_or("Key not found")?.clone()
         };
         patch(&mut data, &patch_data)?;
@@ -88,7 +87,7 @@ impl KeyServiceTrait for KeyService {
 
     async fn list_keys(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
         let list = {
-            let hashmap = self.context.hashmap.lock().await;
+            let hashmap = self.hashmap.lock().await;
             hashmap.keys().cloned().collect()
         };
         Ok(list)
