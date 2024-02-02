@@ -1,4 +1,4 @@
-use json_patch::{patch, Patch};
+use json_patch::{patch, Patch, PatchError};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 
@@ -10,32 +10,21 @@ pub struct KeyService {
 
 pub trait KeyServiceTrait {
     /// Get a key from the hashmap
-    async fn get_key(&self, key: String) -> Result<serde_json::Value, Box<dyn std::error::Error>>;
+    async fn get_key(&self, key: String) -> Result<serde_json::Value, KeyServiceError>;
     /// Post a key to the hashmap
-    async fn post_key(
-        &self,
-        key: String,
-        value: serde_json::Value,
-    ) -> Result<(), Box<dyn std::error::Error>>;
+    async fn post_key(&self, key: String, value: serde_json::Value) -> Result<(), KeyServiceError>;
     /// Put a key to the hashmap
     /// It's same as `post_key`
-    async fn put_key(
-        &self,
-        key: String,
-        value: serde_json::Value,
-    ) -> Result<(), Box<dyn std::error::Error>>;
+    async fn put_key(&self, key: String, value: serde_json::Value) -> Result<(), KeyServiceError>;
     /// Patch a key to the hashmap
     /// It uses RFC-6902 for modifying the value.
-    async fn patch_key(
-        &self,
-        key: String,
-        value: serde_json::Value,
-    ) -> Result<(), Box<dyn std::error::Error>>;
-    async fn list_keys(&self) -> Result<Vec<String>, Box<dyn std::error::Error>>;
+    async fn patch_key(&self, key: String, value: serde_json::Value)
+        -> Result<(), KeyServiceError>;
+    async fn list_keys(&self) -> Result<Vec<String>, KeyServiceError>;
 }
 
 impl KeyServiceTrait for KeyService {
-    async fn get_key(&self, key: String) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    async fn get_key(&self, key: String) -> Result<serde_json::Value, KeyServiceError> {
         {
             let hashmap = self.hashmap.lock().await;
             if let Some(value) = hashmap.get(&key) {
@@ -45,11 +34,7 @@ impl KeyServiceTrait for KeyService {
         Ok(serde_json::Value::Null)
     }
 
-    async fn post_key(
-        &self,
-        key: String,
-        value: serde_json::Value,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    async fn post_key(&self, key: String, value: serde_json::Value) -> Result<(), KeyServiceError> {
         {
             let mut hashmap = self.hashmap.lock().await;
             hashmap.insert(key.clone(), value.clone());
@@ -62,11 +47,7 @@ impl KeyServiceTrait for KeyService {
         Ok(())
     }
 
-    async fn put_key(
-        &self,
-        key: String,
-        value: serde_json::Value,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    async fn put_key(&self, key: String, value: serde_json::Value) -> Result<(), KeyServiceError> {
         self.post_key(key, value).await
     }
 
@@ -74,22 +55,45 @@ impl KeyServiceTrait for KeyService {
         &self,
         key: String,
         value: serde_json::Value,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), KeyServiceError> {
         // Parse the json-patch on value parameter first.
-        let patch_data: Patch = serde_json::from_value(value)?;
+        let patch_data: Patch = serde_json::from_value(value)
+            .map_err(|err| KeyServiceError::UnableToParsePatch(err))?;
         let mut data = {
             let hashmap = self.hashmap.lock().await;
-            hashmap.get(&key).ok_or("Key not found")?.clone()
+            hashmap
+                .get(&key)
+                .ok_or(KeyServiceError::KeyNotFound)?
+                .clone()
         };
-        patch(&mut data, &patch_data)?;
+        patch(&mut data, &patch_data).map_err(|err| KeyServiceError::UnableToPatch(err))?;
         self.put_key(key, data).await
     }
 
-    async fn list_keys(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    async fn list_keys(&self) -> Result<Vec<String>, KeyServiceError> {
         let list = {
             let hashmap = self.hashmap.lock().await;
             hashmap.keys().cloned().collect()
         };
         Ok(list)
+    }
+}
+
+#[derive(Debug)]
+enum KeyServiceError {
+    KeyNotFound,
+    UnableToParsePatch(serde_json::Error),
+    UnableToPatch(json_patch::PatchError),
+}
+
+impl std::fmt::Display for KeyServiceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            KeyServiceError::KeyNotFound => write!(f, "Key not found"),
+            KeyServiceError::UnableToParsePatch(err) => {
+                write!(f, "Unable to parse the patch: {}", err)
+            }
+            KeyServiceError::UnableToPatch(err) => write!(f, "Unable to patch: {}", err),
+        }
     }
 }
