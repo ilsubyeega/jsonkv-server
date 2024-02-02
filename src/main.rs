@@ -46,7 +46,10 @@ async fn main() {
     let filesave = mpsc::channel(1000);
 
     let hashmap = Arc::new(Mutex::new(data));
+
     let context = context::AppContext {
+        config: config.clone(),
+        secrets: Arc::new(Mutex::new(secrets)),
         hashmap: hashmap.clone(),
         sender_filesave: filesave.0.clone(),
 
