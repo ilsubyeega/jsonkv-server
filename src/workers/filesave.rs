@@ -1,9 +1,9 @@
-use tokio::sync::mpsc;
 use std::collections::HashMap;
+use tokio::sync::mpsc;
 /// This collects data events about each modified piece of data as it comes in, and stores the latest data every n seconds.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `data_events` - The receiver of data events.
 /// * `data_dir_path` - The path to the data directory.
 /// * `save_interval` - The interval to save the data to disk. (in milliseconds)
@@ -55,7 +55,6 @@ async fn save_data_to_disk(
     Ok(())
 }
 
-
 pub async fn load_data_from_disk(
     data_dir_path: &str,
 ) -> Result<HashMap<String, serde_json::Value>, Box<dyn std::error::Error>> {
@@ -76,7 +75,13 @@ pub async fn load_data_from_disk(
 
         // read the file and insert to the data.
         let file = std::fs::File::open(file_path)?;
-        let key = file_path.split('/').last().unwrap().split('.').next().unwrap(); // remove the extension.
+        let key = file_path
+            .split('/')
+            .last()
+            .unwrap()
+            .split('.')
+            .next()
+            .unwrap(); // remove the extension.
         let value: serde_json::Value = serde_json::from_reader(file)?;
         data.insert(key.to_owned(), value);
     }

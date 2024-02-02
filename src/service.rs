@@ -1,17 +1,16 @@
+use json_patch::{patch, Patch};
 use std::sync::Arc;
-use json_patch::{Patch, patch};
 use tokio::sync::Mutex;
 
 use crate::context::AppContext;
 
 pub struct KeyService {
-    context: Arc<AppContext>
+    context: Arc<AppContext>,
 }
 
 pub trait KeyServiceTrait {
     /// Get a key from the hashmap
-    async fn get_key(&self, key: String) 
-        -> Result<serde_json::Value, Box<dyn std::error::Error>>;
+    async fn get_key(&self, key: String) -> Result<serde_json::Value, Box<dyn std::error::Error>>;
     /// Post a key to the hashmap
     async fn post_key(
         &self,
@@ -32,8 +31,7 @@ pub trait KeyServiceTrait {
         key: String,
         value: serde_json::Value,
     ) -> Result<(), Box<dyn std::error::Error>>;
-    async fn list_keys(&self) 
-        -> Result<Vec<String>, Box<dyn std::error::Error>>;
+    async fn list_keys(&self) -> Result<Vec<String>, Box<dyn std::error::Error>>;
 }
 
 impl KeyServiceTrait for KeyService {
@@ -57,7 +55,11 @@ impl KeyServiceTrait for KeyService {
             hashmap.insert(key.clone(), value.clone());
         }
         // Sends to the filesave channel in order to save the data to the file.
-        self.context.sender_filesave.send((key.clone(), value.clone())).await.unwrap();
+        self.context
+            .sender_filesave
+            .send((key.clone(), value.clone()))
+            .await
+            .unwrap();
         Ok(())
     }
 
