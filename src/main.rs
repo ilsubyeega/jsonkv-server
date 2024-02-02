@@ -1,8 +1,12 @@
-use std::sync::Arc;
-
 use dotenvy::dotenv;
-use tokio::{net::TcpListener, sync::Mutex};
+use std::future::IntoFuture;
+use std::sync::Arc;
+use tokio::{
+    net::TcpListener,
+    sync::{mpsc, Mutex},
+};
 mod config;
+mod context;
 mod server;
 mod service;
 mod workers;
@@ -35,15 +39,26 @@ async fn main() {
         std::fs::create_dir_all(data_dir_path).unwrap();
     }
 
-    let data = filesave::load_data_from_disk(&config.data_dir_path).await.unwrap();
+    let data = filesave::load_data_from_disk(&config.data_dir_path)
+        .await
+        .unwrap();
 
-    let shared_data = Arc::new(Mutex::new(data));
+    let filesave = mpsc::channel(1000);
 
-    let router = server::create_router().await;
-    let listener = match listen {
-        config::ListenType::Http(addr) => TcpListener::bind(addr).await.unwrap(),
-        config::ListenType::Unix(_) => todo!() // tricky task
+    let context = context::AppContext {
+        hashmap: Arc::new(Mutex::new(data)),
+        sender_filesave: filesave.0.clone(),
     };
 
-    axum::serve(listener, router.into_make_service()).await.unwrap();
+    let router = server::create_router(Arc::new(context)).await;
+    let listener = match listen.clone() {
+        config::ListenType::Http(addr) => TcpListener::bind(addr).await.unwrap(),
+        config::ListenType::Unix(_) => todo!(), // tricky task
+    };
+
+    println!("Listening on: {:?}", listen);
+    tokio::select! {
+        _ = axum::serve(listener, router).into_future() => (),
+        _ = workers::filesave::save_data_worker(filesave.1, config.data_dir_path, config.save_interval) => ()
+    }
 }

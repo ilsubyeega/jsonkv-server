@@ -7,6 +7,8 @@ pub struct Config {
     pub listen: String,
     /// The data directory, where every datas are saved.
     pub data_dir_path: String,
+    /// The interval to save the data to disk. (in milliseconds)
+    pub save_interval: u64,
     /// The path to the secret file.
     pub secret_file_path: String,
     /// Enable `GET /list` route.
@@ -18,6 +20,7 @@ impl Default for Config {
         Self {
             listen: "127.0.0.1:19720".to_owned(),
             data_dir_path: "./data".to_owned(),
+            save_interval: 1000,
             secret_file_path: "./secret.toml".to_owned(),
             enable_list: true,
         }
