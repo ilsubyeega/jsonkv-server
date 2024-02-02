@@ -1,12 +1,14 @@
 use std::net::SocketAddr;
 
 use axum::{
+    body::Body,
     extract::{
         ws::{Message, WebSocket},
-        ConnectInfo, Path, State, WebSocketUpgrade,
+        ConnectInfo, Path, Request, State, WebSocketUpgrade,
     },
-    http::StatusCode,
-    response::IntoResponse,
+    http::{HeaderValue, StatusCode},
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
     routing::get,
     Router,
 };
@@ -15,19 +17,53 @@ use axum_extra::{
     TypedHeader,
 };
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
-use crate::context::AppContext;
+use crate::{config::Secrets, context::AppContext};
 pub async fn create_router(context: Arc<AppContext>) -> Router {
     Router::new()
         .route("/", get(index))
-        .route(
-            "/data/:key",
-            get(get_key).post(post_key).put(put_key).patch(patch_key),
+        .merge(
+            Router::new()
+                .route(
+                    "/data/:key",
+                    get(get_key).post(post_key).put(put_key).patch(patch_key),
+                )
+                .route("/listen/:key", get(ws_key))
+                .route("/list", get(list_keys))
+                .route_layer(middleware::from_fn_with_state(context.clone(), auth_layer))
+                .with_state(context),
         )
-        .route("/listen/:key", get(ws_key))
-        .route("/list", get(list_keys))
-        .with_state(context)
         .fallback(handle_404)
+}
+
+async fn auth_layer(
+    State(context): State<Arc<AppContext>>,
+    request: Request,
+    next: Next,
+) -> Response {
+    if let Some(auth) = request.headers().get("Authorization") {
+        if check_auth(auth, &context.secrets).await {
+            return next.run(request).await;
+        }
+    }
+
+    Response::builder()
+        .status(StatusCode::UNAUTHORIZED)
+        .body(Body::from("Unauthorized"))
+        .unwrap()
+}
+
+async fn check_auth(auth: &HeaderValue, secrets: &Arc<Mutex<Secrets>>) -> bool {
+    let authstr = auth.to_str();
+    if authstr.is_err() {
+        return false;
+    }
+    let auth = authstr.unwrap();
+    // Trim the leading "Bearer " from the auth string.
+    let auth = auth.trim_start_matches("Bearer ");
+    let secrets = secrets.lock().await;
+    secrets.contains_key(auth)
 }
 
 async fn index() -> impl IntoResponse {

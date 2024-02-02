@@ -59,6 +59,12 @@ pub struct Secrets {
     pub secret: Vec<Secret>,
 }
 
+impl Secrets {
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.secret.iter().any(|s| s.secret == key)
+    }
+}
+
 /// Load the secrets from the given path.
 /// If the file does not exist, create a sample and save it to the given path
 pub fn load_secrets(path: &str) -> Secrets {
