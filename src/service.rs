@@ -1,4 +1,3 @@
-use json_patch::{patch, Patch, PatchError};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 
@@ -57,7 +56,7 @@ impl KeyServiceTrait for KeyService {
         value: serde_json::Value,
     ) -> Result<(), KeyServiceError> {
         // Parse the json-patch on value parameter first.
-        let patch_data: Patch = serde_json::from_value(value)
+        let patch_data: json_patch::Patch = serde_json::from_value(value)
             .map_err(|err| KeyServiceError::UnableToParsePatch(err))?;
         let mut data = {
             let hashmap = self.hashmap.lock().await;
@@ -66,7 +65,8 @@ impl KeyServiceTrait for KeyService {
                 .ok_or(KeyServiceError::KeyNotFound)?
                 .clone()
         };
-        patch(&mut data, &patch_data).map_err(|err| KeyServiceError::UnableToPatch(err))?;
+        json_patch::patch(&mut data, &patch_data)
+            .map_err(|err| KeyServiceError::UnableToPatch(err))?;
         self.put_key(key, data).await
     }
 
@@ -80,7 +80,7 @@ impl KeyServiceTrait for KeyService {
 }
 
 #[derive(Debug)]
-enum KeyServiceError {
+pub enum KeyServiceError {
     KeyNotFound,
     UnableToParsePatch(serde_json::Error),
     UnableToPatch(json_patch::PatchError),
