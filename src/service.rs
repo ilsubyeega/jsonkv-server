@@ -1,9 +1,9 @@
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, RwLock};
 
 pub struct KeyService {
     // cloned from appcontext.
-    pub hashmap: Arc<Mutex<std::collections::HashMap<String, serde_json::Value>>>,
+    pub hashmap: Arc<RwLock<std::collections::HashMap<String, serde_json::Value>>>,
     pub sender_filesave: mpsc::Sender<(String, serde_json::Value)>,
 }
 
@@ -25,7 +25,7 @@ pub trait KeyServiceTrait {
 impl KeyServiceTrait for KeyService {
     async fn get_key(&self, key: String) -> Result<serde_json::Value, KeyServiceError> {
         {
-            let hashmap = self.hashmap.lock().await;
+            let hashmap = self.hashmap.read().await;
             if let Some(value) = hashmap.get(&key) {
                 return Ok(value.clone());
             }
@@ -35,7 +35,7 @@ impl KeyServiceTrait for KeyService {
 
     async fn post_key(&self, key: String, value: serde_json::Value) -> Result<(), KeyServiceError> {
         {
-            let mut hashmap = self.hashmap.lock().await;
+            let mut hashmap = self.hashmap.write().await;
             hashmap.insert(key.clone(), value.clone());
         }
         // Sends to the filesave channel in order to save the data to the file.
@@ -59,7 +59,7 @@ impl KeyServiceTrait for KeyService {
         let patch_data: json_patch::Patch = serde_json::from_value(value)
             .map_err(|err| KeyServiceError::UnableToParsePatch(err))?;
         let mut data = {
-            let hashmap = self.hashmap.lock().await;
+            let hashmap = self.hashmap.write().await;
             hashmap
                 .get(&key)
                 .ok_or(KeyServiceError::KeyNotFound)?
@@ -72,7 +72,7 @@ impl KeyServiceTrait for KeyService {
 
     async fn list_keys(&self) -> Result<Vec<String>, KeyServiceError> {
         let list = {
-            let hashmap = self.hashmap.lock().await;
+            let hashmap = self.hashmap.read().await;
             hashmap.keys().cloned().collect()
         };
         Ok(list)

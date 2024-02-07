@@ -17,7 +17,7 @@ use axum_extra::{
     TypedHeader,
 };
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 use crate::{config::Secrets, context::AppContext};
 pub async fn create_router(context: Arc<AppContext>) -> Router {
@@ -54,7 +54,7 @@ async fn auth_layer(
         .unwrap()
 }
 
-async fn check_auth(auth: &HeaderValue, secrets: &Arc<Mutex<Secrets>>) -> bool {
+async fn check_auth(auth: &HeaderValue, secrets: &Arc<RwLock<Secrets>>) -> bool {
     let authstr = auth.to_str();
     if authstr.is_err() {
         return false;
@@ -62,7 +62,7 @@ async fn check_auth(auth: &HeaderValue, secrets: &Arc<Mutex<Secrets>>) -> bool {
     let auth = authstr.unwrap();
     // Trim the leading "Bearer " from the auth string.
     let auth = auth.trim_start_matches("Bearer ");
-    let secrets = secrets.lock().await;
+    let secrets = secrets.read().await;
     secrets.contains_key(auth)
 }
 

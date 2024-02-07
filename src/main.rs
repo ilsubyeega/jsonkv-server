@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::{future::IntoFuture, hash};
 use tokio::{
     net::TcpListener,
-    sync::{mpsc, Mutex},
+    sync::{mpsc, RwLock},
 };
 mod config;
 mod context;
@@ -45,11 +45,11 @@ async fn main() {
 
     let filesave = mpsc::channel(1000);
 
-    let hashmap = Arc::new(Mutex::new(data));
+    let hashmap = Arc::new(RwLock::new(data));
 
     let context = context::AppContext {
         config: config.clone(),
-        secrets: Arc::new(Mutex::new(secrets)),
+        secrets: Arc::new(RwLock::new(secrets)),
         hashmap: hashmap.clone(),
         sender_filesave: filesave.0.clone(),
 
