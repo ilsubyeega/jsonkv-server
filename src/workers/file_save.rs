@@ -82,7 +82,16 @@ pub async fn load_data_from_disk(
             .split('.')
             .next()
             .unwrap(); // remove the extension.
-        let value: serde_json::Value = serde_json::from_reader(file)?;
+
+        // if file is empty, skip it.
+        let value = if file.metadata()?.len() == 0 {
+            serde_json::Value::Null
+        } else {
+            serde_json::from_reader(file).unwrap_or_else(|_| {
+                format!("failed to parse file: {}", file_path);
+                serde_json::Value::Null
+            })
+        };
         data.insert(key.to_owned(), value);
     }
 

@@ -9,6 +9,7 @@ mod config;
 mod context;
 mod server;
 mod service;
+mod websocket;
 mod workers;
 
 use crate::workers::*;
@@ -39,27 +40,33 @@ async fn main() {
         std::fs::create_dir_all(data_dir_path).unwrap();
     }
 
-    let data = filesave::load_data_from_disk(&config.data_dir_path)
+    let data = file_save::load_data_from_disk(&config.data_dir_path)
         .await
         .unwrap();
 
-    let filesave = mpsc::channel(1000);
+    let file_save = mpsc::channel(1000);
+    let file_listen = mpsc::channel(32);
+    let broadcaster = mpsc::channel(32);
+
+    let broadcast = tokio::sync::broadcast::channel(32);
 
     let hashmap = Arc::new(RwLock::new(data));
 
-    let context = context::AppContext {
+    let context = Arc::new(context::AppContext {
         config: config.clone(),
         secrets: Arc::new(RwLock::new(secrets)),
         hashmap: hashmap.clone(),
-        sender_filesave: filesave.0.clone(),
+        sender_file_save: file_save.0.clone(),
+        broadcast: broadcast.0.clone(),
 
-        keyservice: Arc::new(service::KeyService {
+        key_service: Arc::new(service::KeyService {
             hashmap: hashmap.clone(),
-            sender_filesave: filesave.0.clone(),
+            sender_file_save: file_save.0.clone(),
+            broadcaster: broadcaster.0,
         }),
-    };
+    });
 
-    let router = server::create_router(Arc::new(context)).await;
+    let router = server::create_router(context.clone()).await;
     let listener = match listen.clone() {
         config::ListenType::Http(addr) => TcpListener::bind(addr).await.unwrap(),
         config::ListenType::Unix(_) => todo!(), // tricky task
@@ -68,6 +75,9 @@ async fn main() {
     println!("Listening on: {:?}", listen);
     tokio::select! {
         _ = axum::serve(listener, router).into_future() => (),
-        _ = workers::filesave::save_data_worker(filesave.1, config.data_dir_path, config.save_interval) => ()
+        _ = workers::file_save::save_data_worker(file_save.1, config.data_dir_path.clone(), config.save_interval) => (),
+        _ = workers::file_listen::file_listen_worker(&config.data_dir_path, file_listen.0) => (),
+        _ = workers::file_read::file_read_worker(&config.data_dir_path, file_listen.1, context.key_service.clone()) => (),
+        _ = workers::broadcaster::worker_broadcaster(broadcaster.1, broadcast.0) => (),
     }
 }
