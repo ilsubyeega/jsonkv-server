@@ -68,16 +68,16 @@ pub async fn load_data_from_disk(
         // check if the file extension is json.
         let entry = entry?;
         let file_path = entry.path();
-        let file_path = file_path.to_str().unwrap();
-        if !file_path.ends_with(".json") {
+        let file_path_str = file_path.to_str().unwrap();
+        if !file_path_str.ends_with(".json") {
             continue;
         }
 
         // read the file and insert to the data.
-        let file = std::fs::File::open(file_path)?;
-        let key = file_path
-            .split('/')
-            .last()
+        let file = std::fs::File::open(file_path_str)?;
+        let key = file_path.file_name()
+            .unwrap()
+            .to_str()
             .unwrap()
             .split('.')
             .next()
@@ -88,7 +88,7 @@ pub async fn load_data_from_disk(
             serde_json::Value::Null
         } else {
             serde_json::from_reader(file).unwrap_or_else(|_| {
-                format!("failed to parse file: {}", file_path);
+                format!("failed to parse file: {}", file_path_str);
                 serde_json::Value::Null
             })
         };
