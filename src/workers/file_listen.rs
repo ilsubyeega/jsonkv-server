@@ -31,16 +31,17 @@ pub async fn file_listen_worker(path: &str, tx: mpsc::Sender<String>) {
                         }
                     }*/
                     EventKind::Modify(kind) => match kind {
-                        ModifyKind::Data(_) => {
-                            let path = event.paths.last().unwrap().to_str();
-                            // parse path and extract "file" from "/./data/file.json"
-                            let path = parse_path(path.unwrap());
-                            println!("file modified: {:?}", path);
-                            tx.send(path).await.unwrap();
-                        }
-                        _ => {}
-                    },
-                    EventKind::Remove(kind) => { // some ide's using interesting mechanism to remove files so it wouldn't be detected or so.
+                            ModifyKind::Data(_) | ModifyKind::Any /* Windows OS somehow return this as any.  */=> {
+                                let path = event.paths.last().unwrap().to_str();
+                                // parse path and extract "file" from "/./data/file.json"
+                                let path = parse_path(path.unwrap());
+                                println!("file modified: {:?}", path);
+                                tx.send(path).await.unwrap();
+                            }
+                            _ => {}
+                        },
+                    EventKind::Remove(kind) => {
+                        // some ide's using interesting mechanism to remove files so it wouldn't be detected or so.
                         if kind == RemoveKind::File {
                             let path = event.paths.last().unwrap().to_str();
                             // parse path and extract "file" from "/./data/file.json"
