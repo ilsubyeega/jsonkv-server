@@ -95,5 +95,7 @@ pub async fn load_data_from_disk(
         data.insert(key.to_owned(), value);
     }
 
+    println!("loaded data from disk: {:?}", data.keys());
+
     Ok(data)
 }
