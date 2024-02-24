@@ -91,5 +91,13 @@ fn parse_path(path: &PathBuf) -> String {
         .unwrap()
         .to_string()
      */
-    path.file_name().unwrap().to_str().unwrap().to_string()
+    path.file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string()
+        .split(".json")
+        .next()
+        .unwrap()
+        .to_string()
 }
