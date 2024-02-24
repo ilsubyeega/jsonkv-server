@@ -3,22 +3,20 @@ use std::net::SocketAddr;
 use crate::websocket::handle_websocket;
 use axum::{
     body::Body,
-    extract::{
-        ConnectInfo, Path, Request, State, WebSocketUpgrade,
-    },
+    extract::{ConnectInfo, Path, Request, State, WebSocketUpgrade},
     http::{HeaderValue, Method, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::get,
     Json, Router,
 };
-use tower_http::cors::{Any, CorsLayer};
 use axum_extra::{
     headers::{self},
     TypedHeader,
 };
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tower_http::cors::{Any, CorsLayer};
 
 use crate::{config::Secrets, context::AppContext, service::KeyServiceTrait};
 pub async fn create_router(context: Arc<AppContext>) -> Router {
@@ -124,9 +122,9 @@ async fn patch_key(
 ) -> impl IntoResponse {
     match context.key_service.patch_key(&key, value.clone()).await {
         Ok(_) => (StatusCode::OK, value.to_string()),
-        Err(_) => (
+        Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal Server Error".to_owned(),
+            format!("Internal Server Error: {e:?}"),
         ),
     }
 }
@@ -154,5 +152,5 @@ async fn ws_key(
     };
 
     println!("WS {key}: `{user_agent}` at connected.");
-    ws.on_upgrade(move |socket| handle_websocket(socket, key,  context))
+    ws.on_upgrade(move |socket| handle_websocket(socket, key, context))
 }
