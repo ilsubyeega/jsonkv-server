@@ -75,7 +75,8 @@ pub async fn load_data_from_disk(
 
         // read the file and insert to the data.
         let file = std::fs::File::open(file_path_str)?;
-        let key = file_path.file_name()
+        let key = file_path
+            .file_name()
             .unwrap()
             .to_str()
             .unwrap()

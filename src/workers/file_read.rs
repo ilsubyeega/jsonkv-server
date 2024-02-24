@@ -37,7 +37,7 @@ pub async fn file_read_worker(
         };
 
         let file = file.unwrap();
-        
+
         // if string is empty, mark this as null.
         let mut reader = std::io::BufReader::new(file);
         let mut text = String::new();
