@@ -2,7 +2,7 @@ use notify::{
     event::{CreateKind, DataChange, ModifyKind, RemoveKind},
     Config, Error, Event, EventKind, RecommendedWatcher, RecursiveMode, Result, Watcher,
 };
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tokio;
 use tokio::sync::mpsc::{self, channel, Receiver};
 // FIXME: Those are prototyped-required to fixed.
@@ -32,9 +32,9 @@ pub async fn file_listen_worker(path: &str, tx: mpsc::Sender<String>) {
                     }*/
                     EventKind::Modify(kind) => match kind {
                             ModifyKind::Data(_) | ModifyKind::Any /* Windows OS somehow return this as any.  */=> {
-                                let path = event.paths.last().unwrap().to_str();
+                                let path = event.paths.last().unwrap();
                                 // parse path and extract "file" from "/./data/file.json"
-                                let path = parse_path(path.unwrap());
+                                let path = parse_path(path);
                                 println!("file modified: {:?}", path);
                                 tx.send(path).await.unwrap();
                             }
@@ -43,9 +43,9 @@ pub async fn file_listen_worker(path: &str, tx: mpsc::Sender<String>) {
                     EventKind::Remove(kind) => {
                         // some ide's using interesting mechanism to remove files so it wouldn't be detected or so.
                         if kind == RemoveKind::File {
-                            let path = event.paths.last().unwrap().to_str();
+                            let path = event.paths.last().unwrap();
                             // parse path and extract "file" from "/./data/file.json"
-                            let path = parse_path(path.unwrap());
+                            let path = parse_path(path);
                             println!("file removed: {:?}", path);
                             tx.send(path).await.unwrap();
                         }
@@ -81,7 +81,8 @@ fn event_fn(res: Result<Event>, tx: mpsc::Sender<Result<Event>>) {
     tx.blocking_send(res).unwrap();
 }
 
-fn parse_path(path: &str) -> String {
+fn parse_path(path: &PathBuf) -> String {
+    /*
     path.split("/")
         .last()
         .unwrap()
@@ -89,4 +90,6 @@ fn parse_path(path: &str) -> String {
         .next()
         .unwrap()
         .to_string()
+     */
+    path.file_name().unwrap().to_str().unwrap().to_string()
 }
