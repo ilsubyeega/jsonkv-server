@@ -69,7 +69,7 @@ pub async fn load_data_from_disk(
         let entry = entry?;
         let file_path = entry.path();
         let file_path_str = file_path.to_str().unwrap();
-        if !file_path_str.ends_with(".json") {
+        if !file_path_str.ends_with(".json") || file_path_str.ends_with(".example.json") {
             continue;
         }
 
