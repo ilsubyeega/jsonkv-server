@@ -147,13 +147,12 @@ async fn ws_key(
     State(context): State<Arc<AppContext>>,
     Path(key): Path<String>,
 ) -> impl IntoResponse {
-    println!("asddsadsdsa");
     let user_agent = if let Some(TypedHeader(user_agent)) = user_agent {
         user_agent.to_string()
     } else {
         String::from("Unknown browser")
     };
 
-    println!("WS {key}: `{user_agent}` at  connected.");
+    println!("WS {key}: `{user_agent}` at connected.");
     ws.on_upgrade(move |socket| handle_websocket(socket, key,  context))
 }
