@@ -107,40 +107,23 @@ async fn process_message(
         Message::Text(t) => {
             // parse message and if message is not valid, continue
             let msg: Result<ClientMessage, serde_json::Error> = serde_json::from_str(&t);
-            if msg.is_err() {
+            if let Err(err) = msg {
                 // unable to parse message
-                context
-                    .sender
-                    .send(ServerMessage::Error {
-                        message: msg.unwrap_err().to_string(),
-                    })
-                    .await
-                    .unwrap();
+                context.sender.send(ServerMessage::Error {
+                    message: err.to_string(),
+                }).await.unwrap();
                 return ControlFlow::Continue(());
             }
 
             // check if the client is authorized
-            let is_authorized = {
-                let authorized = context.authorized.read().unwrap();
-                *authorized
-            };
+            let is_authorized = *context.authorized.read().unwrap();
             if !is_authorized {
-                let msg: Result<ClientMessage, serde_json::Error> = serde_json::from_str(&t);
-                if msg.is_err() {
-                    // unable to parse message
-                    return ControlFlow::Continue(());
-                }
-
                 let msg = msg.unwrap();
                 match msg {
-                    ClientMessage::Authenticate { secret } => {
+                    ClientMessage::Authenticate(secret) => {
                         if app_context.secrets.read().await.contains_key(&secret) {
                             *context.authorized.write().unwrap() = true;
-                            context
-                                .sender
-                                .send(ServerMessage::Authenticated)
-                                .await
-                                .unwrap();
+                            context.sender.send(ServerMessage::Authenticated).await.unwrap();
                             println!("client authorized");
                         } else {
                             println!("client unauthorized");
@@ -153,56 +136,55 @@ async fn process_message(
                 return ControlFlow::Continue(());
             } else {
                 match msg.unwrap() {
-                    ClientMessage::Subscribe { key } => {
+                    ClientMessage::Subscribe(keys) => {
+                        // push keys to listening
                         {
                             let mut listening = context.listening.write().unwrap();
-                            if !listening.contains(&key) {
-                                listening.push(key.clone());
+                            for key in &keys {
+                                if !listening.contains(key) {
+                                    listening.push(key.clone());
+                                }
                             }
                         }
-                        let val = app_context.key_service.get_key(&key).await.unwrap();
-                        context
-                            .sender
-                            .send(ServerMessage::Subscribed {
-                                key: key.clone(),
-                                value: val.clone(),
-                            })
-                            .await
-                            .unwrap();
-                        println!("client subscribed to: {key}");
+                        // return the keys and their values
+                        for key in keys {
+                            let value = app_context.key_service.get_key(&key).await;
+                            if let Err(err) = value {
+                                context.sender.send(ServerMessage::Error {
+                                    message: err.to_string(),
+                                }).await.unwrap();
+                            } else {
+                                context.sender.send(ServerMessage::Subscribed {
+                                    key: key.clone(),
+                                    value: value.unwrap(),
+                                }).await.unwrap();
+                            }
+                        }
                     }
                     ClientMessage::Data { key, value } => {
                         if context.listening.read().unwrap().contains(&key) {
                             let req = app_context.key_service.put_key(&key, value).await;
-                            if req.is_err() {
-                                context
-                                    .sender
-                                    .send(ServerMessage::Error {
-                                        message: req.unwrap_err().to_string(),
-                                    })
-                                    .await
-                                    .unwrap();
+                            if let Err(err) = req {
+                                context.sender.send(ServerMessage::Error {
+                                    message: err.to_string(),
+                                }).await.unwrap();
                             }
                         }
                     }
                     ClientMessage::Patch { key, value } => {
                         if context.listening.read().unwrap().contains(&key) {
                             let req = app_context.key_service.patch_key(&key, value).await;
-                            if req.is_err() {
-                                context
-                                    .sender
-                                    .send(ServerMessage::Error {
-                                        message: req.unwrap_err().to_string(),
-                                    })
-                                    .await
-                                    .unwrap();
+                            if let Err(err) = req {
+                                context.sender.send(ServerMessage::Error {
+                                    message: err.to_string(),
+                                }).await.unwrap();
                             }
                         }
                     }
                     _ => {}
                 }
             }
-            println!("client sent: {t}");
+            println!("client sent: {}", t);
         }
         Message::Close(_) => {
             return ControlFlow::Break(());
@@ -233,12 +215,8 @@ enum ServerMessage {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
 enum ClientMessage {
-    Authenticate {
-        secret: String,
-    },
-    Subscribe {
-        key: String,
-    },
+    Authenticate(String),
+    Subscribe(Vec<String>),
     Data {
         key: String,
         value: serde_json::Value,
