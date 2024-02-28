@@ -57,8 +57,8 @@ impl KeyServiceTrait for KeyService {
 
     async fn patch_key(&self, key: &str, value: serde_json::Value) -> Result<(), KeyServiceError> {
         // Parse the json-patch on value parameter first.
-        let patch_data: json_patch::Patch = serde_json::from_value(value)
-            .map_err(|err| KeyServiceError::UnableToParsePatch(err))?;
+        let patch_data: json_patch::Patch =
+            serde_json::from_value(value).map_err(KeyServiceError::UnableToParsePatch)?;
         let mut data = {
             let hashmap = self.hashmap.write().await;
             hashmap
@@ -66,8 +66,7 @@ impl KeyServiceTrait for KeyService {
                 .ok_or(KeyServiceError::KeyNotFound)?
                 .clone()
         };
-        json_patch::patch(&mut data, &patch_data)
-            .map_err(|err| KeyServiceError::UnableToPatch(err))?;
+        json_patch::patch(&mut data, &patch_data).map_err(KeyServiceError::UnableToPatch)?;
         self.put_key(key, data).await
     }
 

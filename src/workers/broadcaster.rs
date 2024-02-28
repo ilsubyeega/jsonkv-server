@@ -1,5 +1,3 @@
-use std::sync::mpsc;
-
 use tokio::sync::{broadcast, mpsc::Receiver};
 
 /// Broadcaster worker

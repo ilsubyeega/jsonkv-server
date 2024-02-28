@@ -1,6 +1,6 @@
 use std::{io::Read, path::Path, sync::Arc};
 
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc::Receiver;
 
 use crate::service::{KeyService, KeyServiceTrait};
 /// File read worker
@@ -31,10 +31,7 @@ pub async fn file_read_worker(
 
         // try to get the key from key_service.
         let res = key_service.get_key(&key).await;
-        let is_key_exists = match res {
-            Ok(_) => true,
-            Err(_) => false,
-        };
+        let is_key_exists = res.is_ok();
 
         let file = file.unwrap();
 

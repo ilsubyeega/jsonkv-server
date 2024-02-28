@@ -1,9 +1,7 @@
-use std::net::SocketAddr;
-
 use crate::websocket::handle_websocket;
 use axum::{
     body::Body,
-    extract::{ConnectInfo, Path, Request, State, WebSocketUpgrade},
+    extract::{Path, Request, State, WebSocketUpgrade},
     http::{HeaderValue, Method, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -16,7 +14,7 @@ use axum_extra::{
 };
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 
 use crate::{config::Secrets, context::AppContext, service::KeyServiceTrait};
 pub async fn create_router(context: Arc<AppContext>) -> Router {
@@ -31,7 +29,7 @@ pub async fn create_router(context: Arc<AppContext>) -> Router {
                 .route("/list", get(list_keys))
                 .route_layer(middleware::from_fn_with_state(context.clone(), auth_layer))
                 .layer(CorsLayer::permissive())
-                .route("/listen/:key", get(ws_key)) // auth header doesn't work in websocket.
+                .route("/listen", get(ws_key)) // auth header doesn't work in websocket.
                 .with_state(context),
         )
         .fallback(handle_404)
@@ -42,7 +40,7 @@ async fn auth_layer(
     request: Request,
     next: Next,
 ) -> Response {
-    if (request.method() == Method::OPTIONS) {
+    if request.method() == Method::OPTIONS {
         return next.run(request).await;
     }
     if let Some(auth) = request.headers().get("Authorization") {
@@ -143,7 +141,6 @@ async fn ws_key(
     ws: WebSocketUpgrade,
     user_agent: Option<TypedHeader<headers::UserAgent>>,
     State(context): State<Arc<AppContext>>,
-    Path(key): Path<String>,
 ) -> impl IntoResponse {
     let user_agent = if let Some(TypedHeader(user_agent)) = user_agent {
         user_agent.to_string()
@@ -151,6 +148,6 @@ async fn ws_key(
         String::from("Unknown browser")
     };
 
-    println!("WS {key}: `{user_agent}` at connected.");
-    ws.on_upgrade(move |socket| handle_websocket(socket, key, context))
+    println!("WS: `{user_agent}` at connected.");
+    ws.on_upgrade(move |socket| handle_websocket(socket, context))
 }

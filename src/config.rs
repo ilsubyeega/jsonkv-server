@@ -103,9 +103,8 @@ pub enum ListenType {
 /// Parse the listen address from the given string.
 /// It could be `127.0.0.1:3000` or `unix:/tmp/jsonkv.sock`.
 pub fn parse_listen(listen: &str) -> ListenType {
-    if listen.starts_with("unix:") {
-        let path = listen[5..].to_owned();
-        ListenType::Unix(path)
+    if let Some(path) = listen.strip_prefix("unix:") {
+        ListenType::Unix(path.to_owned())
     } else {
         // check this is valid address.
         let _: std::net::SocketAddr = listen.parse().unwrap();

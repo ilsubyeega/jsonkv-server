@@ -1,8 +1,8 @@
 use notify::{
-    event::{CreateKind, DataChange, ModifyKind, RemoveKind},
-    Config, Error, Event, EventKind, RecommendedWatcher, RecursiveMode, Result, Watcher,
+    event::{ModifyKind, RemoveKind},
+    Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Result, Watcher,
 };
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tokio;
 use tokio::sync::mpsc::{self, channel, Receiver};
 // FIXME: Those are prototyped-required to fixed.
@@ -81,7 +81,7 @@ fn event_fn(res: Result<Event>, tx: mpsc::Sender<Result<Event>>) {
     tx.blocking_send(res).unwrap();
 }
 
-fn parse_path(path: &PathBuf) -> String {
+fn parse_path(path: &Path) -> String {
     /*
     path.split("/")
         .last()
